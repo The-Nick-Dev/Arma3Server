@@ -23,8 +23,11 @@ CDLC_IDS = {
 
 def login(username, password):
     client = SteamClient()
-    client.login(username, password)
-    print("Logged in to Steam as", client.user.name)
+    result = client.login(username, password)
+    if client.user:
+        print("Logged in to Steam as", client.user.name)
+    else:
+        print("Logged in, but user profile data is not yet available (Result:", result, ")")
     return client
 
 def load_cached_manifests():
