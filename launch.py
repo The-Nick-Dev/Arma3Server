@@ -17,6 +17,11 @@ def env_defined(key):
     return key in os.environ and len(os.environ[key]) > 0
 
 CONFIG_FILE = os.environ["ARMA_CONFIG"]
+print("Config: file={} binary={} world={} profile={} port={} branch={} skip_install={} mods_local={} mods_preset='{}' cdlc='{}' headless={}".format(
+    CONFIG_FILE, os.environ["ARMA_BINARY"], os.environ["ARMA_WORLD"], os.environ["ARMA_PROFILE"],
+    os.environ["PORT"], os.environ["STEAM_BRANCH"], os.environ["SKIP_INSTALL"] or "false",
+    os.environ["MODS_LOCAL"], os.environ.get("MODS_PRESET", ""), os.environ["ARMA_CDLC"],
+    os.environ["HEADLESS_CLIENTS"]), flush=True)
 KEYS = "/arma3/server/keys"
 
 if env_defined("CLEAR_KEYS") and os.environ["CLEAR_KEYS"] == "true" and os.path.isdir(KEYS):
@@ -27,12 +32,17 @@ if not os.path.isdir(KEYS):
     os.makedirs(KEYS)
 
 client = None
+if os.environ["SKIP_INSTALL"] not in ["", "false"]:
+    print("SKIP_INSTALL set: skipping Steam login and downloads")
 if os.environ["SKIP_INSTALL"] in ["", "false"]:
     client = api.login(os.environ["STEAM_USER"], os.environ["STEAM_PASSWORD"])
     if not client:
         print("Failed to login to Steam, exiting...")
         exit(1)
+    print("Steam login OK. Downloading depots...", flush=True)
+    print("Depot 233781 (Default Content)")
     api.download_depot(client, 233781) # Default Content
+    print("Depot 233783 (Linux Server)")
     api.download_depot(client, 233783) # Linux Server
     if os.path.basename(os.environ["ARMA_BINARY"]) == "arma3serverprofiling_x64":
         api.download_depot(client, 233785) # Arma 3 Profiling
@@ -55,9 +65,13 @@ if mod_preset != "":
         mods.extend(workshop.preset(mod_preset, client))
     else:
         print(f"MODS_PRESET {mod_preset} does not exist")
+else:
+    print("MODS_PRESET not set")
 
 if os.environ["MODS_LOCAL"] == "true" and os.path.isdir("server/mods"):
     mods.extend(local.mods("mods"))
+
+print("Mods to load:", mods if mods else "none")
 
 launch = "{} -limitFPS={} -world={} {} {}".format(
     os.environ["ARMA_BINARY"],
@@ -108,7 +122,7 @@ if clients != 0:
         )
 
         hc_launch = client_launch + ' -name="{}" -profiles="/arma3/server/configs/profiles"'.format(hc_name)
-        print("LAUNCHING ARMA CLIENT {} WITH".format(i), hc_launch)
+        print("LAUNCHING ARMA CLIENT {} WITH".format(i), re.sub(r"-password=\S+", "-password=***", hc_launch), flush=True)
         subprocess.Popen("exec " + hc_launch, shell=True, cwd="/arma3/server")
 
 else:

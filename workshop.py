@@ -19,6 +19,7 @@ def preset(mod_file, client):
         with open("preset.html", "wb") as f:
             f.write(remote.read())
         mod_file = "preset.html"
+    print("Reading mod preset:", mod_file)
     mods = []
     moddirs = []
     with open(mod_file) as f:
@@ -27,8 +28,10 @@ def preset(mod_file, client):
         matches = re.finditer(regex, html, re.MULTILINE)
         for _, match in enumerate(matches, start=1):
             mods.append(match.group(1))
+            print(f"Mod {len(mods)}: workshop item {match.group(1)}")
             api.download_workshop(client, int(match.group(1)))
             moddirs.append("workshop/" + match.group(1))
         for moddir in moddirs:
             keys.copy("server/"+moddir)
+    print(f"Preset: {len(mods)} mods")
     return moddirs

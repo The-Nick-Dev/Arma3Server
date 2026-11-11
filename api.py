@@ -22,12 +22,34 @@ CDLC_IDS = {
     "ef": 233798
 }
 
+LOGIN_HINTS = {
+    "InvalidPassword": "Wrong user or password. In .env use STEAM_PASSWORD=value without quotes and double any $ ($$).",
+    "AccountLogonDenied": "Steam Guard: a code was sent to the account email.",
+    "AccountLoginDeniedNeedTwoFactor": "Steam Guard mobile authenticator is required. Use an account without Guard.",
+    "TwoFactorCodeMismatch": "Steam Guard code rejected.",
+    "InvalidLoginAuthCode": "Steam Guard code rejected.",
+    "RateLimitExceeded": "Too many login attempts. Stop the container and wait before retrying.",
+    "AccountLoginDeniedThrottle": "Too many login attempts. Stop the container and wait before retrying.",
+    "NoConnection": "Could not reach Steam. Check the network/DNS of the host.",
+    "ServiceUnavailable": "Steam is unavailable. Try again later.",
+    "Timeout": "Steam did not answer in time. Try again later.",
+    "Banned": "The account is banned.",
+    "AccountNotFound": "The account does not exist. Use the login name, not the profile name.",
+}
+
+
 def login(username, password):
+    print(f"Logging in to Steam as '{username}' (password: {'set' if password else 'EMPTY'})...", flush=True)
+    if password[:1] in ("'", '"') and password[-1:] == password[:1]:
+        print("WARNING: STEAM_PASSWORD starts and ends with a quote; quotes in .env are part of the value.")
     client = SteamClient()
     result = client.login(username, password)
     if result != EResult.OK:
         client.disconnect()
-        raise RuntimeError(f"Steam login failed: {result}")
+        name = getattr(result, "name", str(result))
+        hint = LOGIN_HINTS.get(name, "")
+        raise RuntimeError(f"Steam login failed: {name} (EResult {int(result)}). {hint} "
+                           "Note: restart policies retry the login in a loop and Steam may rate-limit it.")
     if client.user:
         print("Logged in to Steam as", client.user.name)
     else:
@@ -106,21 +128,22 @@ def download_depot(client, depot_id):
     if not target_manifest:
         raise RuntimeError(f"No manifest found for depot ID {depot_id}")
     
-    print(f"Downloading Manifest ID: {target_manifest['gid']}, Depot ID: {target_manifest['depot_id']}")
+    print(f"Downloading Manifest ID: {target_manifest['gid']}, Depot ID: {target_manifest['depot_id']} (branch: {branch})")
 
     files_generator = cdn_client.iter_files(ARMA3_SERVER_APP_ID, branch=branch, password=password, filter_func=lambda d_id, depot_info: d_id == target_manifest['depot_id'])
     files = list(files_generator)
     files = [f for f in files if f.is_file]
-    print(f"Found {len(files)} files to download")
+    print(f"Found {len(files)} files in depot {depot_id} ({sum(f.size for f in files) / 1048576:.0f} MB)")
     download_files(client, cdn_client, files, destination="server/")
 
 def download_workshop(client, workshop_id):
+    print(f"Fetching workshop item {workshop_id}...")
     cdn_client = CDNClient(client)
     workshop_manifest = cdn_client.get_manifest_for_workshop_item(workshop_id)
     files_generator = workshop_manifest.iter_files()
     files = list(files_generator)
     files = [f for f in files if f.is_file]
-    print(f"Found {len(files)} files to download")
+    print(f"Found {len(files)} files in workshop item {workshop_id}")
     download_files(client, cdn_client, files, destination=f"server/workshop/{workshop_id}/")
 
 def download_files(client, cdn_client, files, destination):
@@ -140,7 +163,7 @@ def download_files(client, cdn_client, files, destination):
                     continue
         files_to_download.append(file)
     
-    print(f"Need to download {len(files_to_download)} files...")
+    print(f"Up to date: {len(files) - len(files_to_download)}, to download: {len(files_to_download)}")
     
     for i, file in enumerate(files_to_download):
         print(f"Downloading {i+1}/{len(files_to_download)}: {file.filename} ({file.size} bytes)")
@@ -154,6 +177,7 @@ def _download_single_file(file):
     
     chunk_size = 1024 * 1024  # 1MB chunks
     downloaded = 0
+    next_report = 10 * 1024 * 1024
     
     with open(file.local, 'wb') as f:
         while downloaded < file.size:
@@ -167,9 +191,10 @@ def _download_single_file(file):
             f.write(chunk)
             downloaded += len(chunk)
             
-            if downloaded % (10 * 1024 * 1024) == 0:
+            if downloaded >= next_report:
+                next_report += 10 * 1024 * 1024
                 percent = (downloaded / file.size) * 100
-                print(f"  Progress: {percent:.1f}% ({downloaded}/{file.size} bytes)")
+                print(f"  Progress: {percent:.1f}% ({downloaded}/{file.size} bytes)", flush=True)
                 
     if downloaded != file.size:
         raise IOError(f"Incomplete download for {file.filename}: {downloaded}/{file.size} bytes")
