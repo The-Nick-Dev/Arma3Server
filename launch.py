@@ -31,27 +31,10 @@ if not os.path.isdir(KEYS):
         os.remove(KEYS)
     os.makedirs(KEYS)
 
-client = None
 if os.environ["SKIP_INSTALL"] not in ["", "false"]:
-    print("SKIP_INSTALL set: skipping Steam login and downloads")
-if os.environ["SKIP_INSTALL"] in ["", "false"]:
-    client = api.login(os.environ["STEAM_USER"], os.environ["STEAM_PASSWORD"])
-    if not client:
-        print("Failed to login to Steam, exiting...")
-        exit(1)
-    print("Steam login OK. Downloading depots...", flush=True)
-    print("Depot 233781 (Default Content)")
-    api.download_depot(client, 233781) # Default Content
-    print("Depot 233783 (Linux Server)")
-    api.download_depot(client, 233783) # Linux Server
-    if os.path.basename(os.environ["ARMA_BINARY"]) == "arma3serverprofiling_x64":
-        api.download_depot(client, 233785) # Arma 3 Profiling
-
-    for cdlc in os.environ["ARMA_CDLC"].split(";"):
-        if cdlc:
-            cdlc = cdlc.lower()
-            print("Downloading CDLC:", cdlc)
-            api.download_depot(client, api.CDLC_IDS[cdlc])
+    print("SKIP_INSTALL set: skipping Steam install/update")
+else:
+    api.install()
 
 # Mods
 
@@ -60,9 +43,7 @@ mods = []
 mod_preset = os.environ.get("MODS_PRESET", "")
 if mod_preset != "":
     if mod_preset.startswith(("http://", "https://")) or os.path.isfile(mod_preset):
-        if not client:
-            client = api.login(os.environ["STEAM_USER"], os.environ["STEAM_PASSWORD"])
-        mods.extend(workshop.preset(mod_preset, client))
+        mods.extend(workshop.preset(mod_preset))
     else:
         print(f"MODS_PRESET {mod_preset} does not exist")
 else:

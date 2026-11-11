@@ -29,7 +29,8 @@ RUN apt-get update \
     && \
     rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install -U zstandard "git+https://github.com/brettmayson/valvepythonsteam#egg=steam[client]" --break-system-packages
+RUN mkdir -p /steamcmd \
+    && wget -qO- "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" | tar zxf - -C /steamcmd
 
 ENV PYTHONUNBUFFERED=1
 
