@@ -17,6 +17,17 @@ CDLC_IDS = {
     "ef": "233798"
 }
 
+# Lines that confirm a successful login, depending on the SteamCMD version.
+# Current SteamCMD prints "Logging in user '<name>' [U:1:...] to Steam Public...OK"
+# and "Waiting for user info...OK"; older versions print "Logged in OK".
+# Matched case-insensitively against the whole SteamCMD output.
+LOGIN_OK_PATTERNS = [
+    r"logged in ok",
+    r"already logged in",
+    r"logging in user '.+' \[u:\d+:\d+\] to steam public\.\.\.ok",
+    r"waiting for user info\.\.\.ok",
+]
+
 LOGIN_HINTS = {
     "invalid password": "Wrong user or password. In .env use STEAM_PASSWORD=value without quotes and double any $ ($$).",
     "account logon denied": "Steam Guard: a code was sent to the account email. The container cannot enter it; use an account without Steam Guard.",
@@ -63,14 +74,23 @@ def run_steamcmd(commands, label):
     process.stdout.close()
     process.wait()
     text = "\n".join(output)
-    failed_login = re.search(r"FAILED login with result code (.+)", text)
+    failed_login = re.search(r"FAILED (?:login )?with result code (.+)", text)
     if failed_login:
         code = failed_login.group(1).strip()
         hint = LOGIN_HINTS.get(code.lower(), "")
         raise RuntimeError(f"Steam login failed: {code}. {hint} "
                            "Note: restart policies retry the login in a loop and Steam may rate-limit it.")
-    if "Logged in OK" not in text and "already logged in" not in text.lower():
-        raise RuntimeError("Steam login did not complete. Check the SteamCMD output above.")
+    lowered = text.lower()
+    if any(re.search(pattern, lowered) for pattern in LOGIN_OK_PATTERNS):
+        return text
+    # No known confirmation line: only fail when SteamCMD itself failed.
+    # A missed confirmation with exit code 0 and no error is continued, because
+    # the caller validates the actual work (app/workshop ERROR! lines) anyway.
+    if process.returncode:
+        raise RuntimeError(f"SteamCMD exited with code {process.returncode} without confirming the login. "
+                           "Check the SteamCMD output above.")
+    print("WARNING: SteamCMD printed no known login confirmation, but reported no login error; "
+          "continuing anyway.", flush=True)
     return text
 
 
