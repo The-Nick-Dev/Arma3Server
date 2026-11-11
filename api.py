@@ -1,3 +1,4 @@
+from steam.enums import EResult
 from steam.client import SteamClient
 from steam.client.cdn import CDNClient, CDNDepotFile
 import os
@@ -24,13 +25,16 @@ CDLC_IDS = {
 def login(username, password):
     client = SteamClient()
     result = client.login(username, password)
+    if result != EResult.OK:
+        client.disconnect()
+        raise RuntimeError(f"Steam login failed: {result}")
     if client.user:
         print("Logged in to Steam as", client.user.name)
     else:
         print("Logged in, but user profile data is not yet available (Result:", result, ")")
     return client
 
-def load_cached_manifests():
+def load_cached_manifests(branch):
     """Load cached manifest data if it exists and is not expired"""
     if not os.path.exists(MANIFEST_CACHE_FILE):
         return None
@@ -39,6 +43,9 @@ def load_cached_manifests():
         with open(MANIFEST_CACHE_FILE, 'r') as f:
             cache_data = json.load(f)
         
+        if cache_data.get('branch') != branch:
+            return None
+
         if time.time() - cache_data.get('timestamp', 0) > CACHE_EXPIRY_SECONDS:
             print("Manifest cache expired, will refetch...")
             return None
@@ -48,7 +55,7 @@ def load_cached_manifests():
         print("Cache file corrupted or missing, will refetch...")
         return None
 
-def save_manifests_to_cache(manifests):
+def save_manifests_to_cache(manifests, branch):
     """Save manifest data to cache with timestamp"""
     os.makedirs(CACHE_DIR, exist_ok=True)
     
@@ -61,6 +68,7 @@ def save_manifests_to_cache(manifests):
         })
     
     cache_data = {
+        'branch': branch,
         'timestamp': time.time(),
         'manifests': manifest_data
     }
@@ -73,16 +81,18 @@ def save_manifests_to_cache(manifests):
 def download_depot(client, depot_id):
     cdn_client = CDNClient(client)
     
-    cached_manifests = load_cached_manifests()
+    branch = os.environ.get("STEAM_BRANCH", "public") or "public"
+    password = os.environ.get("STEAM_BRANCH_PASSWORD") or None
+    cached_manifests = load_cached_manifests(branch)
     
     if cached_manifests:
         manifests = cached_manifests
         print("Got manifests from cache for ARMA3 server app ID:", ARMA3_SERVER_APP_ID)
     else:
         print("Fetching fresh manifests from Steam...")
-        manifests_obj = cdn_client.get_manifests(ARMA3_SERVER_APP_ID, branch="creatordlc")
+        manifests_obj = cdn_client.get_manifests(ARMA3_SERVER_APP_ID, branch=branch, password=password)
         
-        save_manifests_to_cache(manifests_obj)
+        save_manifests_to_cache(manifests_obj, branch)
         
         manifests = []
         for manifest in manifests_obj:
@@ -94,12 +104,11 @@ def download_depot(client, depot_id):
     
     target_manifest = next((m for m in manifests if m['depot_id'] == depot_id), None)
     if not target_manifest:
-        print(f"No manifest found for depot ID {depot_id}")
-        return
+        raise RuntimeError(f"No manifest found for depot ID {depot_id}")
     
     print(f"Downloading Manifest ID: {target_manifest['gid']}, Depot ID: {target_manifest['depot_id']}")
 
-    files_generator = cdn_client.iter_files(ARMA3_SERVER_APP_ID, branch="creatordlc", filter_func=lambda d_id, depot_info: d_id == target_manifest['depot_id'])
+    files_generator = cdn_client.iter_files(ARMA3_SERVER_APP_ID, branch=branch, password=password, filter_func=lambda d_id, depot_info: d_id == target_manifest['depot_id'])
     files = list(files_generator)
     files = [f for f in files if f.is_file]
     print(f"Found {len(files)} files to download")
@@ -145,7 +154,6 @@ def _download_single_file(file):
     
     chunk_size = 1024 * 1024  # 1MB chunks
     downloaded = 0
-    failed = False
     
     with open(file.local, 'wb') as f:
         while downloaded < file.size:
@@ -163,12 +171,11 @@ def _download_single_file(file):
                 percent = (downloaded / file.size) * 100
                 print(f"  Progress: {percent:.1f}% ({downloaded}/{file.size} bytes)")
                 
-    if failed:
-        print(f"Failed to download {file.filename}")
-    else:
-        if file.is_executable:
-            os.chmod(file.local, 0o755)
-        print(f"✓ Downloaded {file.filename}")
+    if downloaded != file.size:
+        raise IOError(f"Incomplete download for {file.filename}: {downloaded}/{file.size} bytes")
+    if file.is_executable:
+        os.chmod(file.local, 0o755)
+    print(f"✓ Downloaded {file.filename}")
 
 if __name__ == "__main__":
     import os

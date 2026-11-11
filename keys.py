@@ -4,7 +4,7 @@ import shutil
 
 
 def copy(moddir):
-    keys = glob.glob(os.path.join(moddir, "**/*.bikey"))
+    keys = glob.glob(os.path.join(moddir, "**/*.bikey"), recursive=True)
     if len(keys) > 0:
         for key in keys:
             if not os.path.isdir(key):

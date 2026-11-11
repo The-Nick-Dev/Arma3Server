@@ -34,7 +34,7 @@ if os.environ["SKIP_INSTALL"] in ["", "false"]:
         exit(1)
     api.download_depot(client, 233781) # Default Content
     api.download_depot(client, 233783) # Linux Server
-    if os.environ["ARMA_BINARY"] == "arma3serverprofiling_x64":
+    if os.path.basename(os.environ["ARMA_BINARY"]) == "arma3serverprofiling_x64":
         api.download_depot(client, 233785) # Arma 3 Profiling
 
     for cdlc in os.environ["ARMA_CDLC"].split(";"):
@@ -49,14 +49,14 @@ mods = []
 
 mod_preset = os.environ.get("MODS_PRESET", "")
 if mod_preset != "":
-    if os.path.exists(mods_preset):
+    if mod_preset.startswith(("http://", "https://")) or os.path.isfile(mod_preset):
         if not client:
             client = api.login(os.environ["STEAM_USER"], os.environ["STEAM_PASSWORD"])
-        mods.extend(workshop.preset(os.environ["MODS_PRESET"], client))
+        mods.extend(workshop.preset(mod_preset, client))
     else:
         print(f"MODS_PRESET {mod_preset} does not exist")
 
-if os.environ["MODS_LOCAL"] == "true" and os.path.exists("mods"):
+if os.environ["MODS_LOCAL"] == "true" and os.path.isdir("server/mods"):
     mods.extend(local.mods("mods"))
 
 launch = "{} -limitFPS={} -world={} {} {}".format(
@@ -83,7 +83,7 @@ if clients != 0:
 
         matches = re.finditer(regex, data, re.MULTILINE)
         for matchNum, match in enumerate(matches, start=1):
-            config_values[match.group(1).lower()] = match.group(2)
+            config_values[match.group(1).strip().lower()] = match.group(2)
 
         if "headlessclients[]" not in config_values:
             data += '\nheadlessclients[] = {"127.0.0.1"};\n'
@@ -107,9 +107,9 @@ if clients != 0:
             profile=os.environ["ARMA_PROFILE"], i=i, ii=i + 1
         )
 
-        hc_launch = client_launch + ' -name="{}"'.format(hc_name)
+        hc_launch = client_launch + ' -name="{}" -profiles="/arma3/server/configs/profiles"'.format(hc_name)
         print("LAUNCHING ARMA CLIENT {} WITH".format(i), hc_launch)
-        subprocess.Popen(hc_launch, shell=True)
+        subprocess.Popen("exec " + hc_launch, shell=True, cwd="/arma3/server")
 
 else:
     launch += ' -config="/arma3/server/configs/{}"'.format(CONFIG_FILE)
@@ -118,9 +118,9 @@ launch += ' -port={} -name="{}" -profiles="/arma3/server/configs/profiles"'.form
     os.environ["PORT"], os.environ["ARMA_PROFILE"]
 )
 
-if os.path.exists("servermods"):
+if os.path.isdir("server/servermods"):
     launch += mod_param("serverMod", local.mods("servermods"))
 
 print("LAUNCHING ARMA SERVER WITH", launch, flush=True)
 os.chdir("/arma3/server")
-os.system(launch)
+os.execl("/bin/sh", "sh", "-c", "exec " + launch)
