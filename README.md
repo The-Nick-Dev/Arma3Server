@@ -67,6 +67,7 @@ Profiles are saved in `/arma3/server/configs/profiles`
 | `-e HEADLESS_CLIENTS_PROFILE` | Headless client profile name (supports placeholders)      | `$profile-hc-$i` |
 | `-e MODS_LOCAL`               | Should the mods folder be loaded | `true` |
 | `-e MODS_PRESET`              | An Arma 3 Launcher preset to load |
+| `-e ARMA_VALIDATE`            | Force validation of Arma 3 server files on startup (`true`/`false`). Install/update still runs; CDLC and Workshop behavior is unchanged. | `false` |
 | `-e SKIP_INSTALL`             | Skip Arma 3 installation | `false` |
 | `-e CLEAR_KEYS`               | Clear the keys directory every launch (keys will still be copied from mods) | `true` |
 

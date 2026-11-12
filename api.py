@@ -143,6 +143,9 @@ def run_steamcmd(commands, label, show_disk_use=False):
 
 
 def install():
+    validate = os.environ.get("ARMA_VALIDATE", "false").strip().lower()
+    if validate not in ("true", "false"):
+        raise ValueError("ARMA_VALIDATE must be true or false.")
     app_update = ["+app_update", ARMA3_SERVER_APP_ID]
     branch = os.environ.get("STEAM_BRANCH") or "public"
     if os.path.basename(os.environ["ARMA_BINARY"]) == "arma3serverprofiling_x64":
@@ -151,14 +154,15 @@ def install():
         app_update.extend(["-beta", branch])
     if os.environ.get("STEAM_BRANCH_PASSWORD"):
         app_update.extend(["-betapassword", os.environ["STEAM_BRANCH_PASSWORD"]])
-    app_update.append("validate")
+    if validate == "true":
+        app_update.append("validate")
     commands = [app_update]
     for cdlc in os.environ["ARMA_CDLC"].split(";"):
         if cdlc:
             cdlc = cdlc.lower()
             print("Downloading CDLC:", cdlc)
             commands.append(["+app_update", CDLC_IDS[cdlc], "validate"])
-    text = run_steamcmd(commands, f"install/update Arma 3 server (branch: {branch})")
+    text = run_steamcmd(commands, f"install/update Arma 3 server (branch: {branch}, validate: {validate})")
     failed = re.findall(r"ERROR! Failed to install app '(\d+)' \((.+)\)", text)
     if failed:
         raise RuntimeError("SteamCMD failed to install: " + "; ".join(f"app {app} ({reason})" for app, reason in failed))
