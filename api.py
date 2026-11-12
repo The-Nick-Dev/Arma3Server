@@ -170,11 +170,5 @@ def install():
 
 
 def download_workshop(ids):
-    if not ids:
-        return
-    commands = [["+workshop_download_item", ARMA3_WORKSHOP_APP_ID, i] for i in ids]
-    text = run_steamcmd(commands, f"download {len(ids)} workshop item(s)", show_disk_use=True)
-    failed = re.findall(r"ERROR! Download item (\d+) failed", text)
-    if failed:
-        raise RuntimeError(f"Failed to download workshop items: {', '.join(failed)}. "
-                           "The Steam account must own Arma 3 and the items must be public.")
+    import workshop_session
+    workshop_session.download(ids, STEAMCMD, INSTALL_DIR)
