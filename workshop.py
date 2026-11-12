@@ -3,6 +3,7 @@ import urllib.request
 
 import api
 import keys
+import local
 
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36"  # noqa: E501
 WORKSHOP_CONTENT = "steamapps/workshop/content/107410/"
@@ -31,5 +32,6 @@ def preset(mod_file):
     api.download_workshop(mods)
     moddirs = [WORKSHOP_CONTENT + mod for mod in mods]
     for moddir in moddirs:
+        local.lowercase_pbo("server/" + moddir)
         keys.copy("server/" + moddir)
     return moddirs
